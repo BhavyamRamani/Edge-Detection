@@ -1,33 +1,30 @@
 from fastapi import FastAPI, File, UploadFile, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 import cv2
 import numpy as np
-import io
-
+from io import BytesIO
+from PIL import Image
+import os
+ 
 app = FastAPI()
-
+ 
 @app.post("/process_image/")
 async def process_image(file: UploadFile = File(...)):
-  # Read the image file
-  contents = await file.read()
-  nparr = np.fromstring(contents, np.uint8)
-  image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-  # Convert the image to grayscale
-  gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-  # Apply Gaussian blur
-  blur_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
-
-  # Detect edges using Canny edge detection
-  edges = cv2.Canny(blur_image, 10, 70)
-
-  # Save the processed image to an in-memory buffer
-  _, buffer = cv2.imencode(".jpg", edges)
-
-  # Create a generator function to stream the image data
-  def iterfile():
-    yield buffer.tobytes()
-
-  # Return the image as a streaming response
-  return StreamingResponse(iterfile(), media_type="image/jpeg")
+    """Process an image and return the edges as a file."""
+    # Read the image
+    contents = await file.read()
+    image = Image.open(BytesIO(contents)).convert('L')  # Convert to grayscale
+    image = np.array(image)
+ 
+    # Apply Gaussian blur
+    blur_image = cv2.GaussianBlur(image, (3, 3), 0)
+ 
+    # Detect edges using Canny
+    edges = cv2.Canny(blur_image, 100, 200)
+ 
+    # Save the processed image to a temporary file
+    output_path = "processed_image.png"  # Choose a temporary file path
+    cv2.imwrite(output_path, edges)
+ 
+    # Return a FileResponse
+    return FileResponse(output_path, media_type="image/png", filename="processed_image.png")
